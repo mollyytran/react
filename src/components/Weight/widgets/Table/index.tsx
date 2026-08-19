@@ -24,24 +24,29 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PAGINATION_OPTIONS } from "@/core/lib/consts";
 import { luxonDateTimeToLocale } from "@/core/lib/date";
+import { useProfileQuery } from "@/components/User";
+
+const KG_TO_LB = 2.20462;
 
 export interface WeightTableProps {
     weights: WeightEntry[];
 }
 
-const buildRows = (weights: WeightEntry[]): GridRowsProp =>
+const buildRows = (weights: WeightEntry[], isMetric: boolean): GridRowsProp =>
     processTimeSeries(weights, e => e.weight).map((row) => ({
         id: row.entry.id,
         date: row.entry.date,
-        weight: row.entry.weight,
-        change: +row.change.toFixed(2),
-        totalChange: +row.totalChange.toFixed(2),
+        weight: isMetric ? +row.entry.weight.toFixed(2) : Math.round(row.entry.weight * KG_TO_LB),
+        change: isMetric ? +row.change.toFixed(2) : Math.round(row.change * KG_TO_LB),
+        totalChange: isMetric ? +row.totalChange.toFixed(2) : Math.round(row.totalChange * KG_TO_LB),
         days: +row.days.toFixed(1),
     }));
 
 export const WeightTable = ({ weights }: WeightTableProps) => {
     const [t] = useTranslation();
-    const rows = buildRows(weights);
+    const profileQuery = useProfileQuery();
+    const isMetric = profileQuery.data?.useMetric ?? true;
+    const rows = buildRows(weights, isMetric);
     const editEntryQuery = useEditWeightEntryQuery();
     const deleteEntryQuery = useDeleteWeightEntryQuery();
     const [rowModesModel, setRowModesModel] = useState<GridRowModesModel>({});
@@ -73,7 +78,11 @@ export const WeightTable = ({ weights }: WeightTableProps) => {
 
     const processRowUpdate = (newRow: GridRowModel) => {
         const date = newRow.date instanceof Date ? newRow.date : new Date(newRow.date);
-        editEntryQuery.mutate(new WeightEntry(date, Number(newRow.weight), Number(newRow.id)));
+        // Convert lbs → kg before sending to API if user is in imperial mode
+        const weightInKg = isMetric
+            ? Number(newRow.weight)
+            : parseFloat((Number(newRow.weight) / KG_TO_LB).toFixed(2));
+        editEntryQuery.mutate(new WeightEntry(date, weightInKg, Number(newRow.id)));
         return newRow;
     };
 
@@ -97,7 +106,7 @@ export const WeightTable = ({ weights }: WeightTableProps) => {
         },
         {
             field: 'weight',
-            headerName: t('weight'),
+            headerName: `${t('weight')} (${isMetric ? 'kg' : 'lb'})`,
             type: 'number',
             width: 100,
             editable: true,

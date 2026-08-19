@@ -3,6 +3,7 @@ import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterLuxon } from "@mui/x-date-pickers/AdapterLuxon";
 import { WeightEntry } from "@/components/Weight/models/WeightEntry";
 import { useAddWeightEntryQuery, useBodyWeightQuery, useEditWeightEntryQuery } from "@/components/Weight/queries";
+import { useProfileQuery } from "@/components/User";
 import { LoadingPlaceholder } from "@/core/ui/LoadingWidget/LoadingWidget";
 import { Form, Formik } from "formik";
 import { DateTime } from "luxon";
@@ -20,15 +21,22 @@ export const WeightForm = ({ weightEntry, closeFn }: WeightFormProps) => {
     const weightEntriesQuery = useBodyWeightQuery();
     const addWeightQuery = useAddWeightEntryQuery();
     const editWeightQuery = useEditWeightEntryQuery();
+    const profileQuery = useProfileQuery();
 
     const [dateValue, setDateValue] = useState<DateTime | null>(weightEntry ? DateTime.fromJSDate(weightEntry.date) : DateTime.now);
     const [t, i18n] = useTranslation();
 
+    const isMetric = profileQuery.data?.useMetric ?? true;
+    const KG_TO_LB = 2.20462;
+    const minWeight = isMetric ? 30 : Math.round(30 * KG_TO_LB);
+    const maxWeight = isMetric ? 600 : Math.round(600 * KG_TO_LB);
+    const unitLabel = isMetric ? 'kg' : 'lb';
+
     const validationSchema = yup.object({
         weight: yup
             .number()
-            .min(30, 'Min weight is 30 kg')
-            .max(300, 'Max weight is 300 kg')
+            .min(minWeight, `Min weight is ${minWeight} ${unitLabel}`)
+            .max(maxWeight, `Max weight is ${maxWeight} ${unitLabel}`)
             .required('Weight field is required'),
     });
 
@@ -39,22 +47,29 @@ export const WeightForm = ({ weightEntry, closeFn }: WeightFormProps) => {
     return (
         (<Formik
             initialValues={{
-                weight: weightEntry ? weightEntry.weight : 0,
+                weight: weightEntry
+                    ? (isMetric ? weightEntry.weight : Math.round(weightEntry.weight * KG_TO_LB))
+                    : 0,
                 date: weightEntry ? weightEntry.date : new Date(),
             }}
             validationSchema={validationSchema}
             onSubmit={async (values) => {
 
+                // Convert to kg if user is in imperial mode before sending to API
+                const weightInKg = isMetric
+                    ? values.weight
+                    : parseFloat((values.weight / KG_TO_LB).toFixed(2));
+
                 // Edit existing weight entry
                 if (weightEntry) {
                     editWeightQuery.mutate(WeightEntry.clone(
                         weightEntry,
-                        { weight: values.weight, date: values.date }
+                        { weight: weightInKg, date: values.date }
                     ));
 
-                    // Create a new weight entry
+                // Create a new weight entry
                 } else {
-                    addWeightQuery.mutate(new WeightEntry(values.date, values.weight));
+                    addWeightQuery.mutate(new WeightEntry(values.date, weightInKg));
                 }
 
                 if (closeFn) {

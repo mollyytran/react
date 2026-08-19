@@ -15,6 +15,7 @@ import {
     XAxis,
     YAxis
 } from 'recharts';
+import { useProfileQuery } from "@/components/User";
 
 const NR_OF_WEIGHTS_CHART_DOT = 30;
 
@@ -92,11 +93,14 @@ const VarianceLines = ({ emaData }: { emaData: EMADataPoint[] }) => {
 export const WeightChart = ({ weights, height = 300 }: WeightChartProps) => {
     const theme = useTheme();
     const [t] = useTranslation();
+    const profileQuery = useProfileQuery();
+    const isMetric = profileQuery.data?.useMetric ?? true;
+    const KG_TO_LB = 2.20462;
 
     const sortedWeights = [...weights].sort((a, b) => a.date.getTime() - b.date.getTime());
     const weightData = sortedWeights.map(weight => ({
         date: weight.date.getTime(),
-        weight: weight.weight,
+        weight: isMetric ? weight.weight : Math.round(weight.weight * KG_TO_LB),
     }));
 
     const emaData = calculateEMA(weightData, 10);
