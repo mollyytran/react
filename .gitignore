@@ -33,3 +33,5 @@ yarn-error.log*
 # Configuration for the application
 /.env.development
 /.env
+
+.eslintcache
